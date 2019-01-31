@@ -15,12 +15,9 @@ def value_iteration_for_gamblers(p_h, theta=0.0001, discount_factor=1.0):
 
     V = np.zeros(100)
     policy = {_: (np.ones(min(_, 100 - _) + 1) / (min(_, 100 - _) + 1)) for _ in range(1, 100)}
-    ct = 0
     while True:
         prev_policy = copy.deepcopy(policy)
-        ct += 1
-        print(ct)
-        for states in range(1, 99):
+        for states in range(1, 100):
             action_Array = np.zeros(min(states, 100 - states) + 1)
             for actions in range(min(states, 100 - states) + 1):
                 reward_head = 0
@@ -48,14 +45,34 @@ def value_iteration_for_gamblers(p_h, theta=0.0001, discount_factor=1.0):
         if np.all(np.array([(policy[_] == prev_policy[_]).all() for _ in policy.keys()])):
             return policy, V
 
+def PlotCapitalvsValue(V):
+    plt.xlabel('Capital')
+    plt.ylabel('Value Estimates')
 
-policy, V = value_iteration_for_gamblers(0.25)
+    plt.title('Final Policy (action stake) vs State (Capital)')
 
-print("Reshaped Grid Value Function:")
-print(V.reshape((10, 10)))
-print("")
+    x = range(100)
+    y = V[:100]
+    plt.plot(x, y)
 
-# print("Reshaped Grid Policy (0=up, 1=right, 2=down, 3=left):")
-# for _ in policy.keys():
-#     print(str(_) + " : " + policy[_])
-# print("")
+    plt.show()
+
+
+
+plt.xlabel('Capital')
+plt.ylabel('Value Estimates')
+
+plt.title('Final Policy (action stake) vs State (Capital) over varying Head Probabilities')
+
+for prob_h in [0.2,0.4,0.6,0.8]:
+    policy,V = value_iteration_for_gamblers(prob_h)
+    x = range(100)
+    y = V[:100]
+    plt.plot(x, y,label=str(prob_h))
+
+plt.legend()
+fig1 = plt.gcf()
+plt.show()
+plt.draw()
+fig1.savefig('CapitalvsValueEstimate.png', dpi=100)
+
