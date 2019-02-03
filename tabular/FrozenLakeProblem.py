@@ -40,7 +40,7 @@ def get_policy_view(env, V=None, policy=None, discount_factor=1.0):
                 action_val = 0
                 for prob, next_state, reward, done in env.env.P[states][actions]:
                     action_val += prob * (reward + discount_factor * V[next_state])
-                    print(action_val)
+                    # print(action_val)
                 # print(action_val)
                 action_array[actions] = action_val
                 extracted_policy[states] = np.argmax(action_array)
@@ -69,7 +69,28 @@ def policy_iteration(env, discount_factor=1.0):
             return V, policy
 
 
-# def value_iteration()
+def value_iteration(env, theta=0.0001, discount_factor=1.0):
+    nS = env.observation_space.n
+    nA = env.action_space.n
+
+    V = np.zeros(nS)
+
+    while True:
+        prev_V = copy.deepcopy(V)
+
+        for states in range(nS):
+            action_array = np.zeros(nA)
+            for actions in range(nA):
+                action_val = 0
+                for prob, next_state, reward, done in env.env.P[states][actions]:
+                    action_val += prob * (reward + discount_factor * V[next_state])
+                action_array[actions] = action_val
+
+            V[states] = np.max(action_array)
+        if np.max(np.abs(prev_V - V)) <= theta:
+            return V, get_policy_view(env, V=V)
+
+
 def which_action(act):
     if act == 0:
         return "up"
@@ -82,23 +103,42 @@ def which_action(act):
 
 
 if __name__ == "__main__":
+
     env = gym.make('FrozenLake8x8-v0')
     nS = env.observation_space.n
     nA = env.action_space.n
-
     policy = np.ones((nS, nA)) / 4
-    optimal_V, optimal_policy = policy_iteration(env)
-    print("Grid Policy (0=up, 1=right, 2=down, 3=left)")
-    print(get_policy_view(env, policy=optimal_policy))
-    print(optimal_V.reshape((8, 8)))
     config = np.array(range(64)).reshape((8, 8))
+
+    optimal_V, optimal_policy = None, None
+    policy_view = None
+    algo = 'ValueIteration'
+
+    if algo == 'PolicyIteration':
+        optimal_V, optimal_policy = policy_iteration(env)
+    elif algo == 'ValueIteration':
+        optimal_V, policy_view = value_iteration(env)
+
+    print("Grid Policy (0=up, 1=right, 2=down, 3=left)")
+    if policy_view is None:
+        policy_view = get_policy_view(env, policy=optimal_policy)
+        print(policy_view)
+    elif optimal_policy is None:
+        print(policy_view)
+
+    print(optimal_V.reshape((8, 8)))
     print(config)
     episode_data = []
+    policy_view = policy_view.reshape(64)
+
     for episodes in range(1000):
+        print("Episode No. {}".format(episodes))
         observation = env.reset()
         for t in range(500):
             # env.render()
-            action = np.argmax(optimal_policy[observation])
+            # action = np.argmax(optimal_policy[observation])
+            action = policy_view[observation]
+            # print(action)
             # print("action at time {} for observation {} is {}".format(t + 1, observation, which_action(action)))
             next_state, reward, done, info = env.step(action)
             # print(next_state, reward, done, info)
@@ -136,8 +176,10 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
     plt.draw()
-    fig.savefig('EpisodesvsNumberOfTimesteps.png', dpi=100)
+    fig.savefig('EpisodesVsNumberOfTimesteps_VI.png', dpi=100)
 
+
+# Policy Iteration
 # Output of the value function
 # [[0.99840141 0.99847128 0.99857219 0.99868219 0.99879309 0.99889915 0.99899398 0.99906337]
 #  [0.99838398 0.99843718 0.99852459 0.99862888 0.99873978 0.99885244 0.99896855 0.99910431]
@@ -150,6 +192,28 @@ if __name__ == "__main__":
 
 # Output of the Policy
 # [[3 2 2 2 2 2 2 2]
+#  [3 3 3 3 3 3 3 2]
+#  [0 0 0 0 2 3 3 2]
+#  [0 0 0 1 0 0 2 2]
+#  [0 3 0 0 2 1 3 2]
+#  [0 0 0 1 3 0 0 2]
+#  [0 0 1 0 0 0 0 2]
+#  [0 1 0 0 1 2 1 0]]
+
+
+# Value Iteration
+# Output of the value function
+# [[0.99870022 0.99877314 0.99885578 0.99894108 0.99902471 0.99910354 0.99917354 0.99922463]
+#  [0.99870654 0.99876529 0.99884024 0.99892201 0.99900533 0.99908818 0.99917284 0.99927189]
+#  [0.99771314 0.97611533 0.92466011 0.         0.8557119  0.94535729 0.98128813 0.99934779]
+#  [0.99682864 0.931921   0.79906523 0.47395214 0.62280773 0.         0.94405128 0.99944865]
+#  [0.99608428 0.82287329 0.54064617 0.         0.5387708  0.61070526 0.85143916 0.99956987]
+#  [0.99550541 0.         0.         0.16776494 0.38281741 0.44192354 0.         0.9997061 ]
+#  [0.99511065 0.         0.19371585 0.12049359 0.         0.332251   0.         0.99985151]
+#  [0.99491137 0.72774944 0.4607091  0.         0.27741419 0.55483155 0.77741525 0.        ]]
+
+# Output of the Policy
+# [[1 2 2 2 2 2 2 2]
 #  [3 3 3 3 3 3 3 2]
 #  [0 0 0 0 2 3 3 2]
 #  [0 0 0 1 0 0 2 2]
