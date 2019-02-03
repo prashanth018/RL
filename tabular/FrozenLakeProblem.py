@@ -3,6 +3,7 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 import matplotlib
+import sys
 
 
 def policy_evaluation(env, policy, theta=0.0001, discount_factor=1.0):
@@ -69,6 +70,7 @@ def policy_iteration(env, discount_factor=1.0):
             return V, policy
 
 
+# Instead of using this method you can directly call value_iteration_epsilon_greedy with eps=0
 def value_iteration(env, theta=0.0001, discount_factor=1.0):
     nS = env.observation_space.n
     nA = env.action_space.n
@@ -87,6 +89,35 @@ def value_iteration(env, theta=0.0001, discount_factor=1.0):
                 action_array[actions] = action_val
 
             V[states] = np.max(action_array)
+
+        if np.max(np.abs(prev_V - V)) <= theta:
+            return V, get_policy_view(env, V=V)
+
+
+def value_iteration_epsilon_greedy(env, eps=0.05, theta=0.0001, discount_factor=1.0):
+    nS = env.observation_space.n
+    nA = env.action_space.n
+
+    V = np.zeros(nS)
+
+    while True:
+        prev_V = copy.deepcopy(V)
+
+        for states in range(nS):
+            action_array = np.zeros(nA)
+            for actions in range(nA):
+                action_val = 0
+                for prob, next_state, reward, done in env.env.P[states][actions]:
+                    action_val += prob * (reward + discount_factor * V[next_state])
+                action_array[actions] = action_val
+
+            if eps == 0:
+                V[states] = np.max(action_array)
+            else:
+                max_action = np.argmax(action_array)
+                action_val = np.sum(action_array)
+                V[states] = ((eps / nA) * action_val) + ((1 - eps) * action_array[max_action])
+
         if np.max(np.abs(prev_V - V)) <= theta:
             return V, get_policy_view(env, V=V)
 
@@ -102,22 +133,88 @@ def which_action(act):
         return "left"
 
 
+def epsilon_iteration():
+    val = 100
+    epsilons = list(np.array(range(val)) / 100)
+    epsilon_data = {}
+    for epsilon in epsilons:
+        print("epsilon: {}".format(epsilon))
+        epsilon_data[epsilon] = []
+        optimal_V, policy_view = value_iteration_epsilon_greedy(env, eps=epsilon)
+        episode_data = []
+        policy_view = policy_view.reshape(64)
+
+        for episodes in range(1000):
+            observation = env.reset()
+            for t in range(500):
+                action = policy_view[observation]
+                next_state, reward, done, info = env.step(action)
+                if done:
+                    if reward == 0:
+                        # print("LOSE!!")
+                        episode_data.append((t + 1, "lost"))
+                    else:
+                        # print("WIN!!")
+                        episode_data.append((t + 1, "won"))
+                    # print("Episode done after {} timesteps".format(t + 1))
+                    # print()
+                    break
+                observation = next_state
+
+        for episode in episode_data:
+            if episode[1] == "won":
+                epsilon_data[epsilon].append(episode[0])
+
+    # Plot: 'epsilon vs average timesteps for win'
+    x = epsilon_data.keys()
+    y = [sum(epsilon_data[i]) / len(epsilon_data[i]) for i in x]
+
+    fig = plt.figure()
+    plt.xlabel('Epsilon')
+    plt.ylabel('Avg. Timesteps')
+    plt.title('Epsilon vs Avg. Timesteps taken for a win')
+
+    plt.plot(x, y)
+    plt.show()
+    plt.draw()
+    fig.savefig('EpsilonVsAvgTimesteps.png', dpi=100)
+
+    # Plot: 'epsilon vs lost games in 1000 episodes'
+    y = [1000 - len(epsilon_data[i]) for i in x]
+
+    fig = plt.figure()
+    plt.xlabel('Epsilon')
+    plt.ylabel('Number of Loses over 1000 games')
+    plt.title('Epsilon vs Number of Loses')
+
+    plt.plot(x, y)
+    plt.show()
+    plt.draw()
+    fig.savefig('EpsilonVsNumberOfLoses.png', dpi=100)
+
+
 if __name__ == "__main__":
 
     env = gym.make('FrozenLake8x8-v0')
     nS = env.observation_space.n
     nA = env.action_space.n
+    epsilon = 0.05
     policy = np.ones((nS, nA)) / 4
     config = np.array(range(64)).reshape((8, 8))
 
     optimal_V, optimal_policy = None, None
     policy_view = None
-    algo = 'ValueIteration'
+    algo = 'EpsilonIteration'
 
     if algo == 'PolicyIteration':
         optimal_V, optimal_policy = policy_iteration(env)
     elif algo == 'ValueIteration':
         optimal_V, policy_view = value_iteration(env)
+    elif algo == 'ValueIterationEpsilonGreedy':
+        optimal_V, policy_view = value_iteration_epsilon_greedy(env, eps=epsilon)
+    elif algo == 'EpsilonIteration':
+        epsilon_iteration()
+        sys.exit()
 
     print("Grid Policy (0=up, 1=right, 2=down, 3=left)")
     if policy_view is None:
@@ -177,7 +274,6 @@ if __name__ == "__main__":
     plt.show()
     plt.draw()
     fig.savefig('EpisodesVsNumberOfTimesteps_VI.png', dpi=100)
-
 
 # Policy Iteration
 # Output of the value function
