@@ -1,6 +1,8 @@
 import gym
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
+import matplotlib
 
 
 def policy_evaluation(env, policy, theta=0.0001, discount_factor=1.0):
@@ -67,6 +69,18 @@ def policy_iteration(env, discount_factor=1.0):
             return V, policy
 
 
+# def value_iteration()
+def which_action(act):
+    if act == 0:
+        return "up"
+    elif act == 1:
+        return "right"
+    elif act == 2:
+        return "down"
+    elif act == 3:
+        return "left"
+
+
 if __name__ == "__main__":
     env = gym.make('FrozenLake8x8-v0')
     nS = env.observation_space.n
@@ -77,25 +91,52 @@ if __name__ == "__main__":
     print("Grid Policy (0=up, 1=right, 2=down, 3=left)")
     print(get_policy_view(env, policy=optimal_policy))
     print(optimal_V.reshape((8, 8)))
-
-    for episodes in range(5):
+    config = np.array(range(64)).reshape((8, 8))
+    print(config)
+    episode_data = []
+    for episodes in range(1000):
         observation = env.reset()
-        print(observation)
-        for t in range(300):
+        for t in range(500):
             # env.render()
             action = np.argmax(optimal_policy[observation])
-            print("action at time {} = {}".format(t + 1, action))
-            next_step, reward, done, info = env.step(action)
-            print(next_step, reward, done, info)
+            # print("action at time {} for observation {} is {}".format(t + 1, observation, which_action(action)))
+            next_state, reward, done, info = env.step(action)
+            # print(next_state, reward, done, info)
+            # print(config)
+            # print()
             if done:
                 if reward == 0:
-                    print("LOSE!!")
+                    # print("LOSE!!")
+                    episode_data.append((t + 1, "lost"))
                 else:
-                    print("WIN!!")
-                print("Episode done after {} timesteps".format(t + 1))
-                print()
+                    # print("WIN!!")
+                    episode_data.append((t + 1, "won"))
+                # print("Episode done after {} timesteps".format(t + 1))
+                # print()
                 break
-            observation = next_step
+            observation = next_state
+
+    x = range(1000)
+    y = [tup[0] for tup in episode_data]
+    label = []
+    for tup in episode_data:
+        if tup[1] == 'won':
+            label.append(0)
+        else:
+            label.append(1)
+    colors = ["blue", "red"]
+
+    fig = plt.figure()
+
+    plt.xlabel('Timesteps')
+    plt.ylabel('Episodes')
+    plt.title('Number of Timesteps per Episode')
+
+    plt.scatter(x, y, c=label, cmap=matplotlib.colors.ListedColormap(colors))
+    plt.legend()
+    plt.show()
+    plt.draw()
+    fig.savefig('EpisodesvsNumberOfTimesteps.png', dpi=100)
 
 # Output of the value function
 # [[0.99840141 0.99847128 0.99857219 0.99868219 0.99879309 0.99889915 0.99899398 0.99906337]
