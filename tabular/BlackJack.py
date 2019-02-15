@@ -64,7 +64,49 @@ def monte_carlo_prediction(env, num_eps, discount_factor=1.0):
     return V
 
 
+def monte_corlo_control(env, num_eps, eps=0.1, discount_factor=1.0):
+    returns_sum = defaultdict(float)
+    returns_counts = defaultdict(float)
+    nA = env.action_space.n
+
+    Q = defaultdict(lambda: np.zeros(env.action_space.n))
+
+    for _ in range(num_eps):
+        observation = env.reset()
+        episode = []
+        if _ % 10000 == 0:
+            print(str(_) + " Episodes done!")
+        for t in range(100):
+            A = np.ones(nA, dtype=float) * eps / nA
+            ind = np.argmax(Q[observation])
+            A[ind] += (1 - eps)
+            action = np.random.choice(np.arange(len(A)), p=A)
+            next_state, reward, done, info = env.step(action)
+            episode.append((observation, action, reward))
+            if done:
+                break
+            observation = next_state
+
+        temp_set = set()
+        for w in episode:
+            temp_set.add((w[0], w[1]))
+
+        for state, action in temp_set:
+            ind = 0
+            for i, w in enumerate(episode):
+                if w[0] == state and w[1] == action:
+                    ind = i
+            returns_sum[(state, action)] += sum([w[2] * discount_factor ** i for i, w in enumerate(episode[ind:])])
+            returns_counts[(state, action)] += 1
+            Q[state][action] = returns_sum[(state, action)] / returns_counts[(state, action)]
+    return Q
+
+
 if __name__ == "__main__":
-    V_over500k = monte_carlo_prediction(env, num_eps=500000)
+    #V_over500k = monte_carlo_prediction(env, num_eps=500000)
+    Q_over500k = monte_corlo_control(env, num_eps=500000)
+    V_over500k = defaultdict(float)
+    for state in Q_over500k.keys():
+        V_over500k[state] = np.max(Q_over500k[state])
     pprint(V_over500k)
     plotting.plot_value_function(V_over500k, title="5,00,000 Steps")
