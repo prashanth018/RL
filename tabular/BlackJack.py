@@ -1,3 +1,5 @@
+# The following link gives a proper understanding over modified BlackJack in reinforcement learning.
+# https://codebox.net/pages/reinforcement-learning-blackjack
 import numpy as np
 import sys
 from collections import defaultdict
