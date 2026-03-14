@@ -4,6 +4,7 @@ import torch
 import random
 import gymnasium as gym
 import torch.optim as optim
+import os
 
 """
 Env: Cart Pole
@@ -27,6 +28,13 @@ ACTION_SIZE = 2
 BATCH_SIZE = 32
 LR = 0.001
 WEIGHT_TRANFER_CYCLES = 100
+WEIGHT_SAVE_CYCLES = 10000
+WEIGHTS_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "dqn_replay_buffer/weights"
+)
+TRAINING_STATS_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "dqn_replay_buffer/training_stats"
+)
 
 
 class ReplayBuffer:
@@ -77,7 +85,8 @@ class DQNSim:
         # sync the update and target DQNs
         self.targetQN.load_state_dict(self.updateQN.state_dict())
         self.optimizer = optim.RMSprop(self.updateQN.parameters(), lr=LR)
-        self.env = gym.make("CartPole-v1", render_mode="human")
+        self.env = gym.make("CartPole-v1")
+        self.env_viz = gym.make("CartPole-v1", render_mode="human")
         self.epsilon = EPSILON
         self.avg_loss_per_episode = []
         self.total_rewards_per_episode = []
@@ -92,18 +101,24 @@ class DQNSim:
                 q_values = self.updateQN(state)
                 return q_values.argmax().item()
 
+    def greedy(self, state):
+        with torch.no_grad():
+            q_values = self.updateQN(state)
+            return q_values.argmax().item()
+
     def compute_target(self, batch):
         _, _, rewards, next_states, dones = zip(*batch)
 
         next_states = torch.stack(next_states)  # [batch_size, state_size]
         rewards = torch.tensor(rewards)  # [batch_size, 1]
-        dones = torch.tensor(dones)  # [batch_size, 1]
+        dones = torch.tensor(dones, dtype=torch.float32)  # [batch_size, 1]
 
         with torch.no_grad():
             # if terminal state: target = reward
             # else: target = reward + gamma * max Q_target(s', a')
-            targets = rewards + GAMMA * self.targetQN(next_states).max(dim=1).values * (
-                1 - dones
+            targets = (
+                rewards
+                + (1 - dones) * GAMMA * self.targetQN(next_states).max(dim=1).values
             )  # [batch_size, 1]
 
         return targets
@@ -138,7 +153,8 @@ class DQNSim:
         axes[2].set_ylabel("Timesteps")
 
         plt.tight_layout()
-        plt.savefig("training_stats.png")
+        os.makedirs(TRAINING_STATS_DIR, exist_ok=True)
+        plt.savefig(os.path.join(TRAINING_STATS_DIR, "training_stats.png"))
         plt.show()
 
     def episode(self):
@@ -150,7 +166,7 @@ class DQNSim:
         terminated, truncated = False, False
         while not done:
             # get action
-            action = self.epsilon_greedy(state)
+            action = self.epsilon_greedy(torch.tensor(state, dtype=torch.float32))
 
             # take a step
             next_state, reward, terminated, truncated, info = self.env.step(action)
@@ -182,13 +198,25 @@ class DQNSim:
             # weight transfer from updateQN to targetQN & save weights
             if self.total_steps % WEIGHT_TRANFER_CYCLES == 0:
                 self.targetQN.load_state_dict(self.updateQN.state_dict())
+                # torch.save(
+                #     self.updateQN.state_dict(),
+                #     f"./RL/fa/dqn_replay_buffer_weights/weights_timesteps{self.total_steps}.pth",
+                # )
+
+            if self.total_steps % WEIGHT_SAVE_CYCLES == 0:
+                os.makedirs(WEIGHTS_DIR, exist_ok=True)
                 torch.save(
                     self.updateQN.state_dict(),
-                    f"weights_timesteps{self.total_steps}.pth",
+                    os.path.join(
+                        WEIGHTS_DIR, f"weights_timesteps{self.total_steps}.pth"
+                    ),
                 )
 
             # decay epsilon
             self.epsilon = self.epsilon * 0.99
+
+            # state change
+            state = next_state
 
         self.total_timesteps_per_episode.append(episode_timesteps)
         self.total_rewards_per_episode.append(episode_rewards)
@@ -197,10 +225,38 @@ class DQNSim:
 
         print(f"Terminated = {terminated}, Truncated={truncated}")
 
+    def visualize(self, weights_path=None):
+        if weights_path is None:
+            files = [f for f in os.listdir(WEIGHTS_DIR) if f.endswith(".pth")]
+            weights_path = os.path.join(
+                WEIGHTS_DIR,
+                max(
+                    files, key=lambda f: os.path.getmtime(os.path.join(WEIGHTS_DIR, f))
+                ),
+            )
+        self.updateQN.load_state_dict(torch.load(weights_path, weights_only=True))
+        state, info = self.env_viz.reset()
+        rewards = 0
+        timesteps = 0
+        done = False
+        terminated, truncated = False, False
+        while not done:
+            action = self.greedy(torch.tensor(state, dtype=torch.float32))
+            next_state, reward, terminated, truncated, info = self.env_viz.step(action)
+            done = truncated or terminated
+            state = next_state
+
+            # update reward and timesteps
+            rewards += reward
+            timesteps += 1
+        print(f"Reward = {rewards} & timesteps = {timesteps}")
+
 
 if __name__ == "__main__":
     sim = DQNSim()
-    NUM_EPISODES = 5
+    NUM_EPISODES = 500
     for ep in range(NUM_EPISODES):
+        print(f"Running episode {ep}")
         sim.episode()
     sim.plot_stats()
+    sim.visualize()
