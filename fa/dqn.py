@@ -212,9 +212,6 @@ class DQNSim:
                     ),
                 )
 
-            # decay epsilon
-            self.epsilon = self.epsilon * 0.99
-
             # state change
             state = next_state
 
@@ -222,6 +219,9 @@ class DQNSim:
         self.total_rewards_per_episode.append(episode_rewards)
         if episode_timesteps > 0:
             self.avg_loss_per_episode.append(episode_loss / episode_timesteps)
+
+        # decay epsilon
+        self.epsilon = self.epsilon * 0.99
 
         print(f"Terminated = {terminated}, Truncated={truncated}")
 
@@ -234,6 +234,7 @@ class DQNSim:
                     files, key=lambda f: os.path.getmtime(os.path.join(WEIGHTS_DIR, f))
                 ),
             )
+            print(f"weight_path: {weights_path}")
         self.updateQN.load_state_dict(torch.load(weights_path, weights_only=True))
         state, info = self.env_viz.reset()
         rewards = 0
