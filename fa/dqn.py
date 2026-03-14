@@ -58,11 +58,11 @@ class DQN(nn.Module):
     def __init__(self):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(STATE_SIZE, 512),
+            nn.Linear(STATE_SIZE, 256),
             nn.ReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(512, ACTION_SIZE),
+            nn.Linear(256, ACTION_SIZE),
         )
 
     def forward(self, x):
@@ -78,10 +78,14 @@ class DQNSim:
         self.targetQN.load_state_dict(self.updateQN.state_dict())
         self.optimizer = optim.RMSprop(self.updateQN.parameters(), lr=LR)
         self.env = gym.make("CartPole-v1", render_mode="human")
+        self.epsilon = EPSILON
+        self.avg_loss_per_episode = []
+        self.total_rewards_per_episode = []
+        self.total_timesteps_per_episode = []
         self.total_steps = 0
 
     def epsilon_greedy(self, state):
-        if random.random() < EPSILON:
+        if random.random() < self.epsilon:
             return self.env.action_space.sample()
         else:
             with torch.no_grad():
@@ -113,9 +117,35 @@ class DQNSim:
         predictions = self.updateQN(states).gather(1, actions.unsqueeze(1)).squeeze(1)
         return predictions
 
+    def plot_stats(self):
+        import matplotlib.pyplot as plt
+
+        _, axes = plt.subplots(3, 1, figsize=(10, 8))
+
+        axes[0].plot(self.total_rewards_per_episode)
+        axes[0].set_title("Total Reward per Episode")
+        axes[0].set_xlabel("Episode")
+        axes[0].set_ylabel("Reward")
+
+        axes[1].plot(self.avg_loss_per_episode)
+        axes[1].set_title("Avg Loss per Episode")
+        axes[1].set_xlabel("Episode")
+        axes[1].set_ylabel("Loss")
+
+        axes[2].plot(self.total_timesteps_per_episode)
+        axes[2].set_title("Timesteps per Episode")
+        axes[2].set_xlabel("Episode")
+        axes[2].set_ylabel("Timesteps")
+
+        plt.tight_layout()
+        plt.savefig("training_stats.png")
+        plt.show()
+
     def episode(self):
         state, info = self.env.reset()
-        timesteps = 0
+        episode_timesteps = 0
+        episode_rewards = 0
+        episode_loss = 0
         done = False
         terminated, truncated = False, False
         while not done:
@@ -129,10 +159,9 @@ class DQNSim:
             # save to buffer
             self.buffer.push(state, action, reward, next_state, done)
 
-            # print stats
-            # print(f"val = {timesteps}, next_state = {next_state}, reward = {reward}")
-            timesteps += 1
-            self.total_steps += 1
+            # update episodic reward & timesteps
+            episode_timesteps += 1
+            episode_rewards += reward
 
             # gradient update
             if self.buffer.__len__() >= BATCH_SIZE:
@@ -145,13 +174,33 @@ class DQNSim:
                 loss.backward()
                 self.optimizer.step()
 
+                # update loss
+                episode_loss += loss.item()
+
+            self.total_steps += 1
+
+            # weight transfer from updateQN to targetQN & save weights
             if self.total_steps % WEIGHT_TRANFER_CYCLES == 0:
                 self.targetQN.load_state_dict(self.updateQN.state_dict())
-                EPSILON = EPSILON * 0.99
+                torch.save(
+                    self.updateQN.state_dict(),
+                    f"weights_timesteps{self.total_steps}.pth",
+                )
+
+            # decay epsilon
+            self.epsilon = self.epsilon * 0.99
+
+        self.total_timesteps_per_episode.append(episode_timesteps)
+        self.total_rewards_per_episode.append(episode_rewards)
+        if episode_timesteps > 0:
+            self.avg_loss_per_episode.append(episode_loss / episode_timesteps)
 
         print(f"Terminated = {terminated}, Truncated={truncated}")
 
 
 if __name__ == "__main__":
     sim = DQNSim()
-    sim.episode()
+    NUM_EPISODES = 5
+    for ep in range(NUM_EPISODES):
+        sim.episode()
+    sim.plot_stats()
