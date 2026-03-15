@@ -79,3 +79,33 @@ Not a dramatic improvement, we want to avoid catastrophic forgetting and want th
 - Increase the size of replay buffer
 - Use prioritized experience replay
 - Increase weight transfer cycles?
+
+## Training Observations (Run 2 — 500 Episodes)
+
+What changed: Changed buffer size to 10000
+
+![Training 3 Stats](dqn_replay_buffer/training_stats/training_3_stats.png)
+
+## Key Hyperparameters Changes
+| Parameter | Value |
+|---|---|
+| Replay buffer size | 10000 |
+
+## How is this change reflected?
+| Observation | Run 1 | Run 2 |
+|---|---|---|
+| Total timesteps | ~110k | ~130k |
+| Crash character | One hard crash, slow recovery | Multiple shorter crashes, faster recovery |
+| loss | mostly flat, looks better | ramp to ~300, stays noisy |
+
+## Notes:
+- Total timesteps improved by 20%, this looks like a direct causation of the buffer size increase.
+- Loss pattern is gradual ramp to 300, maybe its healthy?
+- Catastrophic forgetting still occurs
+
+## Overall
+Definitely improved but the catastrophic forgetting still occurs.
+
+## Follow ups:
+- We do not randomize the buffer entries. This means the entries are in the sequential order. Although, this wouldn't influence the sample method, we would evict the data in serialized order. This doesn't respect I.I.D. to actually learn the Markov property.
+- After 200 episodes agent is fully greedy. Apply, max(epsilon, 0.01)

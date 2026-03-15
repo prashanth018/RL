@@ -26,9 +26,11 @@ EPSILON = 0.1
 STATE_SIZE = 4
 ACTION_SIZE = 2
 BATCH_SIZE = 32
+REPLAY_BUFFER_CAPACITY = 10000
 LR = 0.001
 WEIGHT_TRANFER_CYCLES = 100
 WEIGHT_SAVE_CYCLES = 10000
+NUM_EPISODES = 500
 WEIGHTS_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "dqn_replay_buffer/weights"
 )
@@ -79,7 +81,7 @@ class DQN(nn.Module):
 
 class DQNSim:
     def __init__(self):
-        self.buffer = ReplayBuffer(1000)
+        self.buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
         self.updateQN = DQN()
         self.targetQN = DQN()
         # sync the update and target DQNs
@@ -255,9 +257,10 @@ class DQNSim:
 
 if __name__ == "__main__":
     sim = DQNSim()
-    NUM_EPISODES = 500
-    for ep in range(NUM_EPISODES):
-        print(f"Running episode {ep}")
-        sim.episode()
-    sim.plot_stats()
-    sim.visualize()
+    # for ep in range(NUM_EPISODES):
+    #     print(f"Running episode {ep}")
+    #     sim.episode()
+    # sim.plot_stats()
+    sim.visualize(
+        "/Users/imduvvuri/Documents/RL/RL/fa/dqn_replay_buffer/weights/weights_timesteps130000.pth"
+    )
