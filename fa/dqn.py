@@ -23,6 +23,7 @@ Action Items:
 GAMMA = 0.99
 ALPHA = 0.01
 EPSILON = 0.1
+EPSILON_FLOOR = 0.01
 STATE_SIZE = 4
 ACTION_SIZE = 2
 BATCH_SIZE = 32
@@ -223,7 +224,7 @@ class DQNSim:
             self.avg_loss_per_episode.append(episode_loss / episode_timesteps)
 
         # decay epsilon
-        self.epsilon = self.epsilon * 0.99
+        self.epsilon = max(self.epsilon * 0.99, EPSILON_FLOOR)
 
         print(f"Terminated = {terminated}, Truncated={truncated}")
 
@@ -261,6 +262,7 @@ if __name__ == "__main__":
     #     print(f"Running episode {ep}")
     #     sim.episode()
     # sim.plot_stats()
+    # sim.visualize()
     sim.visualize(
-        "/Users/imduvvuri/Documents/RL/RL/fa/dqn_replay_buffer/weights/weights_timesteps130000.pth"
+        "/Users/imduvvuri/Documents/RL/RL/fa/dqn_replay_buffer/weights/weights_timesteps150000.pth"
     )

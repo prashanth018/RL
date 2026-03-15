@@ -80,7 +80,7 @@ Not a dramatic improvement, we want to avoid catastrophic forgetting and want th
 - Use prioritized experience replay
 - Increase weight transfer cycles?
 
-## Training Observations (Run 2 — 500 Episodes)
+## Training Observations (Run 3 — 500 Episodes)
 
 What changed: Changed buffer size to 10000
 
@@ -109,3 +109,38 @@ Definitely improved but the catastrophic forgetting still occurs.
 ## Follow ups:
 - We do not randomize the buffer entries. This means the entries are in the sequential order. Although, this wouldn't influence the sample method, we would evict the data in serialized order. This doesn't respect I.I.D. to actually learn the Markov property.
 - After 200 episodes agent is fully greedy. Apply, max(epsilon, 0.01)
+
+## Training Observations (Run 4 — 500 Episodes)
+
+What changed: Added shuffle to buffer once every 250 additions to aid the I.I.D property
+
+![Training 4 Stats](dqn_replay_buffer/training_stats/training_4_stats.png)
+
+## Notes:
+- Large crash (catastrophic forgetting) towards the end
+- Model does good until 450 episodes.
+
+## Overall
+Philosophically, having FIFO confines both good/bad experiences to one region of the buffer. This means, they get evicted all at once. Shuffle changes this property. With shuffle, the there is no regional confinement of good/bad experiences. Plausible mechanistic story for the skyrocket loss at the end: By episode 480, buffer is full of mostly "good" 500-reward trajectories. With FIFO, the oldest (worst, early-training) experiences would have long been evicted. With shuffle, some of those ancient, off-policy experiences from episode 10-50 might still be sitting in the buffer because they got shuffled into high-index positions that the write pointer hasn't reached yet. Those stale transitions have huge TD errors against the current Q-network, which produces a loss spike when a batch happens to sample several of them. That loss spike destabilizes the policy, which generates bad new experiences, which compounds — a brief catastrophic feedback loop.
+
+## Follow ups:
+- Remove shuffle
+- Add epsilon floor for continued epsilon greedy
+
+## Training Observations (Run 5 — 500 Episodes)
+
+What changed: Added epsilon floor = 0.01
+
+![Training 5 Stats](dqn_replay_buffer/training_stats/training_5_stats.png)
+
+## Notes:
+- Huge drop in loss (max loss 60).
+- Consistently maxing episodic after 300th episode.
+- exploration helps with catastrophic forgetting.
+- Total max rewards ~160k (compared to ~130k in experiment 3)
+
+## Overall
+Exploration helps model to bring it out of catastropic forgeting phases. When there is an exploration floor, the mechanism provides against catastrophic forgetting / policy collapse.  Without a floor, epsilon eventually hits something like 0.013 by episode 200 (experiment 3). At that point, the agent almost never explores, so if the Q-network drifts into slightly wrong value estimates (due to bootstrapping error compounding), it has no corrective signal i.e., it just follows its increasingly wrong greedy policy into a death spiral. That 1% exploration floor acts as a safety valve: enough random actions to occasionally stumble into corrective experiences that keep the Q-values grounded. 
+
+## Follow ups:
+- Prioritized experience replay
