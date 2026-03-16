@@ -32,12 +32,7 @@ LR = 0.001
 WEIGHT_TRANFER_CYCLES = 100
 WEIGHT_SAVE_CYCLES = 10000
 NUM_EPISODES = 500
-WEIGHTS_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "dqn_replay_buffer/weights"
-)
-TRAINING_STATS_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "dqn_replay_buffer/training_stats"
-)
+MODEL_FOLDER = "dqn_replay_buffer"
 
 
 class ReplayBuffer:
@@ -80,8 +75,11 @@ class DQN(nn.Module):
         return self.net(x)
 
 
-class DQNSim:
-    def __init__(self):
+class DQNAgent:
+    def __init__(self, model_folder):
+        base = os.path.dirname(os.path.abspath(__file__))
+        self.weights_dir = os.path.join(base, model_folder, "weights")
+        self.stats_dir = os.path.join(base, model_folder, "training_stats")
         self.buffer = ReplayBuffer(REPLAY_BUFFER_CAPACITY)
         self.updateQN = DQN()
         self.targetQN = DQN()
@@ -156,8 +154,8 @@ class DQNSim:
         axes[2].set_ylabel("Timesteps")
 
         plt.tight_layout()
-        os.makedirs(TRAINING_STATS_DIR, exist_ok=True)
-        plt.savefig(os.path.join(TRAINING_STATS_DIR, "training_stats.png"))
+        os.makedirs(self.stats_dir, exist_ok=True)
+        plt.savefig(os.path.join(self.stats_dir, "training_stats.png"))
         plt.show()
 
     def episode(self):
@@ -207,11 +205,11 @@ class DQNSim:
                 # )
 
             if self.total_steps % WEIGHT_SAVE_CYCLES == 0:
-                os.makedirs(WEIGHTS_DIR, exist_ok=True)
+                os.makedirs(self.weights_dir, exist_ok=True)
                 torch.save(
                     self.updateQN.state_dict(),
                     os.path.join(
-                        WEIGHTS_DIR, f"weights_timesteps{self.total_steps}.pth"
+                        self.weights_dir, f"weights_timesteps{self.total_steps}.pth"
                     ),
                 )
 
@@ -230,11 +228,12 @@ class DQNSim:
 
     def visualize(self, weights_path=None):
         if weights_path is None:
-            files = [f for f in os.listdir(WEIGHTS_DIR) if f.endswith(".pth")]
+            files = [f for f in os.listdir(self.weights_dir) if f.endswith(".pth")]
             weights_path = os.path.join(
-                WEIGHTS_DIR,
+                self.weights_dir,
                 max(
-                    files, key=lambda f: os.path.getmtime(os.path.join(WEIGHTS_DIR, f))
+                    files,
+                    key=lambda f: os.path.getmtime(os.path.join(self.weights_dir, f)),
                 ),
             )
             print(f"weight_path: {weights_path}")
@@ -257,7 +256,7 @@ class DQNSim:
 
 
 if __name__ == "__main__":
-    sim = DQNSim()
+    sim = DQNAgent(model_folder=MODEL_FOLDER)
     # for ep in range(NUM_EPISODES):
     #     print(f"Running episode {ep}")
     #     sim.episode()

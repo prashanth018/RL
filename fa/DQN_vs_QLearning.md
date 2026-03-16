@@ -62,7 +62,7 @@ The `max` operator picks `a₁` with value `11.2`. The true value is `10.0`, so 
 
 This is **systemic**: the `max` operator preferentially selects whichever action has the highest positive noise. Even if estimation errors are zero-mean (equally likely to be positive or negative), taking the max over those errors always skews positive. Run this experiment 1000 times with different random noise, and the expected value of `max_a Q(s', a; θ⁻)` will always be `≥ 10.0`, never below. The more actions you have, or the noisier your estimates, the worse the overestimation.
 
-> **Note:** The overestimation/underestimation isn't the devil issue. The consistent selection of overestimated values due to the `max` operation is the real problem.
+> **Note:** The overestimation/underestimation isn't the devil here. The consistent selection of overestimated values due to the `max` operation is the real problem.
 
 ### Cascading Effect
 
