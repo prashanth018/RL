@@ -143,4 +143,13 @@ What changed: Added epsilon floor = 0.01
 Exploration helps model to bring it out of catastropic forgeting phases. When there is an exploration floor, the mechanism provides against catastrophic forgetting / policy collapse.  Without a floor, epsilon eventually hits something like 0.013 by episode 200 (experiment 3). At that point, the agent almost never explores, so if the Q-network drifts into slightly wrong value estimates (due to bootstrapping error compounding), it has no corrective signal i.e., it just follows its increasingly wrong greedy policy into a death spiral. That 1% exploration floor acts as a safety valve: enough random actions to occasionally stumble into corrective experiences that keep the Q-values grounded. 
 
 ## Follow ups:
+- DDQN?
 - Prioritized experience replay
+- Visualize weights using t-SNE?
+
+
+## Reflecting DQN vs Q-learning
+
+Now is a good segway into why DQN was innovated over Q-learning, the problems it solves (sample correlation, moving targets), the new problem it introduces (maximization bias), and how Double DQN addresses it.
+
+See [DQN_vs_QLearning.md](DQN_vs_QLearning.md) for the full writeup. 
