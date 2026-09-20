@@ -30,8 +30,8 @@ class DDQNAgent(DQNAgent):
 
 if __name__ == "__main__":
     sim = DDQNAgent()
-    for ep in range(NUM_EPISODES):
-        print(f"Running episode {ep}")
-        sim.episode()
-    sim.plot_stats()
-    # sim.visualize()
+    # for ep in range(NUM_EPISODES):
+    #     print(f"Running episode {ep}")
+    #     sim.episode()
+    # sim.plot_stats()
+    sim.visualize()

@@ -153,3 +153,17 @@ Exploration helps model to bring it out of catastropic forgeting phases. When th
 Now is a good segway into why DQN was innovated over Q-learning, the problems it solves (sample correlation, moving targets), the new problem it introduces (maximization bias), and how **Double DQN** addresses it.
 
 See [DQN_vs_QLearning.md](DQN_vs_QLearning.md) for the full writeup. 
+
+
+## Training Observations (Run 6 — 500 Episodes) with DDQN
+
+What changed: Used DDQN on the same environment
+
+### Observation
+- Smoother loss function compared to DQN. 
+
+### Follow ups
+- Compare Q values between DQN & DDQN using 2 approaches:
+-- Slice the state space (most interpretable). Fix 2 dimensions at a nominal value (e.g. position=0, velocity=0) and sweep a 2D grid over the two most informative dimensions — angle and angular velocity. Plot a heatmap of max_a Q(s, a) or Q(s, right) - Q(s, left) (the "preference" map).
+-- Collect a large set of states from rollouts (replay buffer maybe? or fresh rollouts are better?), project to 2D, and color by Q-value.
+- Brush up on tensor/vectorized operations — [Sasha Rush's Tensor Puzzles](https://github.com/srush/Tensor-Puzzles)
