@@ -11,7 +11,8 @@ Working notes in Q&A form. `TO DO` / `need to confirm` markers are things I flag
 6. [Robot policy learning approaches](#robot-policy-learning-approaches)
 7. [Where does the data come from?](#where-does-the-data-come-from)
 8. [ACT](#act)
-9. [Questions](#questions)
+9. [Observations](#observations)
+10. [Questions](#questions)
 
 ---
 
@@ -196,6 +197,31 @@ In fact, I think you could do a weighted avg during train time and then do ensem
 - **It's better than executing one long chunk from a single prediction** (say one 500-step chunk) because that'd lead to compounding errors (see above). The problem with one 500-step chunk was that executing each action puts you in a slightly stranger state. With ACT, we technically have 100 predictions for an action at a specific timestep. This smooths out the action value and puts you on a fairly stable trajectory.
 - **A chunk commits to a single plan.** If a robot moves left, it'll continue to move left through the whole chunk. Rather, a chunk-size-1 robot's predictions are broken. action 1 says left, action 2 says right, etc.,
 - *Personal fav.* When a human teleops a robot, human behavior naturally lags and is often jumpy. Say a normal teleop is 50 frames per sec. Imagine a human lags at the cup handle for 2 secs. This is 100 frames of training data with "no action". A chunk-size-1 ACT algorithm would undesirably learn to freeze for such input image because the teleop data for those 2 secs contains 100 frames of no action. With a chunk-size-100 ACT, we'd have 99 frames of "no action" and 100th frame would have a legit action. After 50 predictions; we'd have 50 frames of "no action" with following 50 frames of legit actions. Also, these future actions get smoothed as more and more predictions are made. Note: This avoids the freezing but the robot still learns undesirable human behaviors like freezing for 2 seconds.
+
+---
+
+## Observations
+
+### LLM mid-training is imitation learning
+
+*Personal fav.*
+
+**Premise:** The key difference between IL and RL is that RL needs to figure out the signal of the trajectory by itself, IL already knows the signal of the trajectory (generally positive) so we just use the trajectory to finetune the model. This is a key distinction to remember.
+
+**Pipeline shift:** Prior to 2025, LLM training involved pre-training + post-training. Now it's pre + mid + post. Post-training is mainly SFT + RLHF/RLVR. In post-training, the model simulates its own trajectories and finds its own signals in the environment.
+
+**Why mid-training:**
+
+- Researchers found that waiting until the very end to teach a model how to think acts like a shallow veneer. If you want a model to be deeply good at math or logic, why not give it those priors early on in the training?
+- Pre-2025, you make a pre-trained model run its own simulations in an environment to find its own signals which are used to train the model. It's hard to have a naive model do these simulations without wasting a lot of compute!
+
+**What is mid-training:** Now that we have some of these successful trajectories (from user data, or our own agentic task sandbox simulations), we could train the model on these successful trajectories through imitation learning. This is mid-training. This gives models useful priors like how to reason, how to use tools etc., before reaching SFT. In this stage, models are given thinking traces of successful complex math proofs, complex tool calling, complex reasoning traces etc.,
+
+**Intuitively:**
+
+- **Pre-training** incorporates the mammalian knowledge. This knowledge on its own is raw and unproductive.
+- **Mid-training** incorporates useful skills. This knowledge teaches the model the relevant structures of the world that it ought to operate in.
+- **Post-training** helps the model put these useful skills at play, run its own experiments and learn. This phase teaches the model to experience the nuances of the skills it learned in mid-training. A model cut off after mid-training would fail often at tasks and would often not try different approaches to the same problem.
 
 ---
 
