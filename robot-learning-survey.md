@@ -10,7 +10,8 @@ Working notes in Q&A form. `TO DO` / `need to confirm` markers are things I flag
 5. [RL on real robots, and sim to real](#rl-on-real-robots-and-sim-to-real)
 6. [Robot policy learning approaches](#robot-policy-learning-approaches)
 7. [Where does the data come from?](#where-does-the-data-come-from)
-8. [Questions](#questions)
+8. [ACT](#act)
+9. [Questions](#questions)
 
 ---
 
@@ -162,6 +163,39 @@ Some algorithms learn just the policy. Some learn the concepts, intuition and ph
 - **Imitation learning** = policy + human demos. (BC, DAgger, ACT, Diffusion Policy)
 - **VLAs** = policy + human demos + internet knowledge inherited from a pretrained vision-language model. The robot already knows what a "cup" or "the red one" is before seeing a single demo. (RT-2, OpenVLA, π0, π0.5)
 - **World models / JEPA** = learn how the world changes, mostly from video, then plan inside it. (Dreamer, V-JEPA 2, DINO-WM)
+
+---
+
+## ACT
+
+ACT, also called Action Chunking Transformer, predicts the next n-actions (say 100 from now) chunk instead of one action at a time.
+
+Architecturally it is **not** a Vision Transformer. It is a **CVAE** (conditional variational autoencoder): a **ResNet18** backbone embeds each camera's image independently, those features feed a **transformer encoder-decoder**, and the decoder's learned positional queries (one per timestep in the chunk) cross-attend to the observation to emit the whole chunk in one pass. Trained with **L1 loss** on the actions plus a KL term on the latent.
+
+Inputs are the camera images and joint positions (proprioception). The original ACT has **no language conditioning**, it is single-task. CVAE encoder embeds the expert's action sequence, but only at training time, compressing it into a style variable `z` that captures the demo's style. That `z` is what lets ACT handle multimodal demos. At test time `z` is set to zero (the prior mean), so the policy is deterministic given the observation.
+
+Below is an example snippet of the trajectory.
+
+| Inference at step | Predicts actions for steps |
+| --- | --- |
+| 1 | 1, 2, 3, **4** |
+| 2 | 2, 3, **4**, 5 |
+| 3 | 3, **4**, 5, 6 |
+| 4 | **4**, 5, 6, 7 |
+
+### Ensembling the overlapping predictions
+
+You could then choose to do a weighted avg (with recency bias) of the predicted actions, or just execute action ensemble (1, 2) and then smooth action 3 & 4 etc.,
+
+Note: In the above example, values of action at timestep 4 are averaged across all the other predictions.
+
+In fact, I think you could do a weighted avg during train time and then do ensemble inference during test time.
+
+### What problems does ACT fix?
+- **It's better than predicting 1 action at a time** since you'd have a smoother trajectory because of averaging.
+- **It's better than executing one long chunk from a single prediction** (say one 500-step chunk) because that'd lead to compounding errors (see above). The problem with one 500-step chunk was that executing each action puts you in a slightly stranger state. With ACT, we technically have 100 predictions for an action at a specific timestep. This smooths out the action value and puts you on a fairly stable trajectory.
+- **A chunk commits to a single plan.** If a robot moves left, it'll continue to move left through the whole chunk. Rather, a chunk-size-1 robot's predictions are broken. action 1 says left, action 2 says right, etc.,
+- *Personal fav.* When a human teleops a robot, human behavior naturally lags and is often jumpy. Say a normal teleop is 50 frames per sec. Imagine a human lags at the cup handle for 2 secs. This is 100 frames of training data with "no action". A chunk-size-1 ACT algorithm would undesirably learn to freeze for such input image because the teleop data for those 2 secs contains 100 frames of no action. With a chunk-size-100 ACT, we'd have 99 frames of "no action" and 100th frame would have a legit action. After 50 predictions; we'd have 50 frames of "no action" with following 50 frames of legit actions. Also, these future actions get smoothed as more and more predictions are made. Note: This avoids the freezing but the robot still learns undesirable human behaviors like freezing for 2 seconds.
 
 ---
 
