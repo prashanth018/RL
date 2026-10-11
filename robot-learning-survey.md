@@ -12,6 +12,7 @@ Working notes in Q&A form. `TO DO` / `need to confirm` markers are things I flag
 7. [Where does the data come from?](#where-does-the-data-come-from)
 8. [ACT](#act)
 9. [Observations](#observations)
+    - [LLM mid-training is imitation learning](#llm-mid-training-is-imitation-learning)
 10. [Questions](#questions)
 
 ---
