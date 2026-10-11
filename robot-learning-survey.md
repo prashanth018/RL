@@ -3,17 +3,18 @@
 Working notes in Q&A form. `TO DO` / `need to confirm` markers are things I flagged as not yet understood.
 
 **Contents**
-1. [Behavior cloning basics](#1-behavior-cloning-basics)
-2. [BC in LLM terms](#2-bc-in-llm-terms)
-3. [Covariate shift](#3-covariate-shift)
-4. [Various outputs and losses for robot policy](#4-various-outputs-and-losses-for-robot-policy)
-5. [RL on real robots, and sim to real](#5-rl-on-real-robots-and-sim-to-real)
-6. [Robot policy learning approaches](#6-robot-policy-learning-approaches)
-7. [Questions](#7-questions)
+1. [Behavior cloning basics](#behavior-cloning-basics)
+2. [BC in LLM terms](#bc-in-llm-terms)
+3. [Covariate shift](#covariate-shift)
+4. [Various outputs and losses for robot policy](#various-outputs-and-losses-for-robot-policy)
+5. [RL on real robots, and sim to real](#rl-on-real-robots-and-sim-to-real)
+6. [Robot policy learning approaches](#robot-policy-learning-approaches)
+7. [Where does the data come from?](#where-does-the-data-come-from)
+8. [Questions](#questions)
 
 ---
 
-## 1. Behavior cloning basics
+## Behavior cloning basics
 
 ### Basic Behavior Cloning
 
@@ -37,7 +38,7 @@ In BC, more history can make things worse. The model can learn to copy its previ
 
 ---
 
-## 2. BC in LLM terms
+## BC in LLM terms
 
 ### What is BC formally equivalent to, both in classic ML terms and in the LLM world?
 
@@ -56,7 +57,7 @@ In contrast, true **Knowledge Distillation** minimizes the forward KL divergence
 
 ---
 
-## 3. Covariate shift
+## Covariate shift
 
 ### What is Covariate Shift? How is it different from Concept Drift & Prior Probability Shift? How are each of these handled in production?
 
@@ -80,7 +81,7 @@ GPT was trained on trillions of words from millions of people: Reddit posts, tex
 
 ---
 
-## 4. Various outputs and losses for robot policy
+## Various outputs and losses for robot policy
 
 - **MSE head:** Assuming we have n actuators. In this approach each actuator produces a continuous output like, `action = [joint1: +0.12, joint2: -0.30, joint3: +0.05, ..., gripper: 0.8]`.
 - **Gaussian head (mean, variance per actuator):** In this approach each actuator produces a mean and variance. We then calculate the probability `z` vector for each actuator from the mean and variance. We compute this based on the expert action value (need to confirm this). We then take negative log likelihood on the prob vector for each actuator to compute the loss (need to confirm). The advantage over the pure MSE is that the learning is gonna be more stable? (confirm this too).
@@ -89,7 +90,7 @@ GPT was trained on trillions of words from millions of people: Reddit posts, tex
 
 ---
 
-## 5. RL on real robots, and sim to real
+## RL on real robots, and sim to real
 
 ### Instead of imitation learning, the robot learns by trial and error (RL). What are the concrete reasons RL on a real robot arm is much harder?
 
@@ -108,9 +109,12 @@ This is because the real world has friction, the actuators are imperfect, the co
 
 ---
 
-## 6. Robot policy learning approaches
+## Robot policy learning approaches
 
 There are various ways to achieve a learnt robot policy. Robot policies are mainly **DRL** with continuous actions.
+
+### Algorithm families
+
 - **Policy Gradient:** Output actions are generally discretized and trained with the policy output and an advantage. General algorithms are **REINFORCE**, **PPO**, **GRPO**. PPO is an **on-policy** algorithm so each update needs a fresh rollout and the older policy gets thrown away.
 - **Q-learning family:** Uses DQN variants. There is no policy network. Instead the robot learns value network. **QT-Opt** is a DQN variant for robot learning. DQN family of algorithms are **off-policy**. This means you can train the network on older data (**replay buffer**).
 - **Actor Critic:** DDPG and SAC train a second network (the "actor") whose only job is to output the action that maximizes Q. This is called actor-critic.
@@ -126,8 +130,41 @@ There are various ways to achieve a learnt robot policy. Robot policies are main
 
 The search moves toward the region where Q is high. It's a few dozen forward passes through Q, with no gradients involved. This approach is kind of similar to GRPO but with value network.
 
+### Model-free vs model-based
+
+From David Silver's lectures, there are 2 kinds of approaches to RL:
+
+- **Model-free learning:** learn the policy only.
+- **Model-based learning:** learn the policy *and* a model of the environment.
+
+Both are after the same end product, a policy. Acting well requires some grasp of how the environment behaves, and the two differ in whether that knowledge is made "explicit". Model-free leaves it implicit inside the policy. Model-based learns the env dynamics separately and reaches the policy through that crutch. Examples of model-based are **MuZero**, **Dreamer**, **JEPA** and other world models.
+
+| Component | Mapping | At decision time |
+| --- | --- | --- |
+| **Policy** | observation → action, directly | See, then act. One forward pass, no thinking ahead. |
+| **World model** | (state, action) → next state, i.e. "what happens if I do this?" | Imagine several possible action sequences, predict where each leads, pick the best. That's **planning**. |
+
 ---
 
-## 7. Questions
+## Where does the data come from?
+
+Another important question to think about is, where does the data come from?
+
+- Either through imitation (BC we spoke about in section 1)
+- Robot's own attempts through Reinforcement Learning.
+- Learning in Sim and applying it in real.
+- Internet data (text, video, images)
+
+### Current classes of algorithms, by what they learn
+
+Some algorithms learn just the policy. Some learn the concepts, intuition and physics through pretraining with vision and language data. Some learn the dynamics and then the policy, picking up the world's physics by watching videos.
+
+- **Imitation learning** = policy + human demos. (BC, DAgger, ACT, Diffusion Policy)
+- **VLAs** = policy + human demos + internet knowledge inherited from a pretrained vision-language model. The robot already knows what a "cup" or "the red one" is before seeing a single demo. (RT-2, OpenVLA, π0, π0.5)
+- **World models / JEPA** = learn how the world changes, mostly from video, then plan inside it. (Dreamer, V-JEPA 2, DINO-WM)
+
+---
+
+## Questions
 
 - Influence of data availability on choosing to use various model types.. for example, Diffusion is taking off in robot learning (vs using transformers) because of the data scarcity. Transformer architectures need lot of training data which is scarce in robot domain. (Validate invalidate this hypothesis).
