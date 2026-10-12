@@ -11,9 +11,10 @@ Working notes in Q&A form. `TO DO` / `need to confirm` markers are things I flag
 6. [Robot policy learning approaches](#robot-policy-learning-approaches)
 7. [Where does the data come from?](#where-does-the-data-come-from)
 8. [ACT](#act)
-9. [Observations](#observations)
+9. [VAE](#vae)
+10. [Observations](#observations)
     - [LLM mid-training is imitation learning](#llm-mid-training-is-imitation-learning)
-10. [Questions](#questions)
+11. [Questions](#questions)
 
 ---
 
@@ -198,6 +199,124 @@ In fact, I think you could do a weighted avg during train time and then do ensem
 - **It's better than executing one long chunk from a single prediction** (say one 500-step chunk) because that'd lead to compounding errors (see above). The problem with one 500-step chunk was that executing each action puts you in a slightly stranger state. With ACT, we technically have 100 predictions for an action at a specific timestep. This smooths out the action value and puts you on a fairly stable trajectory.
 - **A chunk commits to a single plan.** If a robot moves left, it'll continue to move left through the whole chunk. Rather, a chunk-size-1 robot's predictions are broken. action 1 says left, action 2 says right, etc.,
 - *Personal fav.* When a human teleops a robot, human behavior naturally lags and is often jumpy. Say a normal teleop is 50 frames per sec. Imagine a human lags at the cup handle for 2 secs. This is 100 frames of training data with "no action". A chunk-size-1 ACT algorithm would undesirably learn to freeze for such input image because the teleop data for those 2 secs contains 100 frames of no action. With a chunk-size-100 ACT, we'd have 99 frames of "no action" and 100th frame would have a legit action. After 50 predictions; we'd have 50 frames of "no action" with following 50 frames of legit actions. Also, these future actions get smoothed as more and more predictions are made. Note: This avoids the freezing but the robot still learns undesirable human behaviors like freezing for 2 seconds.
+
+## VAE
+
+VAE is a successor of AE but solves the problem of efficiently distributing and packing the points in the latent space. Contrary to AE, it also enables the decoder to not remember a specific point to reconstruct an image. It rather enables the decoder to recognize a "region" to map an image to.
+
+Now the KL loss, encoder's gaussian params output, reparametrization trick, and gaussian sampling the decoder input in latent space are all a series of tricks to enable the above behavior.
+
+### The two losses
+
+We mainly enforce 2 kinds of losses to enforce this behavior. Below is the intuition for each:
+
+- **Reconstruction loss:** Helps distribute the class representations in the latent space far apart (to distinguish better) while trying to fully reconstruct the given image from the latent representation. It also actively tries to minimize the standard dev corresponding to each class. *Important: This loss has a standing incentive to spread centers arbitrarily far apart, because more separation means more distinguishability.*
+- **KL loss:** KL loss helps efficiently pack the representations in the latent space with fewer gaps. In VAE, KL loss forces the representations to have the mean near the origin. It also penalizes if the variance becomes 0. This creates a tug of war between KL loss and reconstruction loss but enables the variance to be just enough to enforce variability in generating the class.
+
+### Math
+
+`VAE Loss = reconstruction + β · KL`
+
+- Reconstruction loss is straight forward: `L_recon = ‖x − D(z)‖² = MSE(generated image - input image)`
+- KL has a closed form for diagonal gaussians, summed over the latent dimensions `j`:
+    ```
+    KL( E(z|x) ‖ N(0,I) ) = 0.5 · Σ_j ( μ_j² + σ_j² − log σ_j² − 1 )
+    ```
+- `μ_j²` is a **spring pulling every blob's center to the origin**. `μ=5` costs 12.5, `μ=0` costs 0. This stops encoder from scattering classes off to `(-200, 8000)`, so the occupied region stays connected with no faraway fragmented islands.
+- `σ_j² − log σ_j² − 1` **forces the width toward exactly 1**, punishing both directions.
+
+| `σ` | per-dim KL (at `μ=0`) | why |
+| --- | --- | --- |
+| 1.0 | 0 | the target |
+| 0.1 (too sharp) | 1.81 | `−log σ²` climbing |
+| 0.01 | 4.10 | climbing harder |
+| → 0 | **→ ∞** | infinite wall |
+| 3.0 (too fuzzy) | 2.90 | `σ²` dominates |
+
+### Encoder / decoder boundary
+
+The encoder emits **two** vectors of latent size (32 in ACT), mean & log-variance.
+
+```python
+mu, logvar = encoder(x)        # each (batch, 32)
+std = torch.exp(0.5 * logvar)  # always positive by construction
+```
+
+**Reparametrization trick:** Now sampling `z = torch.normal(mu, std)` kills the gradient, because "drawing a random number" has no useful derivative w.r.t. `mu`. So we pull the randomness out and make `z` plain arithmetic:
+
+```python
+eps = torch.randn_like(std)   # drawn OUTSIDE the computational graph, a constant
+z = mu + std * eps            # one multiply, one add
+```
+
+### Why sampling `N(0,I)` actually produces an output?
+
+A random `z` was never in the training data, so why isn't it a covariate shift problem for the decoder?
+
+Because KL is charged **per example and averaged**, not on the aggregate. So each individual blob is a modest off-center bump that bought its position, but take 10,000 of them with centers mildly scattered around the origin and width ≈ 1 and their **union** looks like `N(0,I)`. The prior is matched by the *mixture*, not by any single blob.
+
+So when you sample `z ~ N(0,I)` you are drawing from (approximately) the exact distribution the decoder was trained on. There is no covariate shift, not by luck but because KL **engineered the training-time input distribution to equal the test-time sampling distribution**.
+
+A `z` you have genuinely never seen, sitting between two class blobs, decodes to something in between, because the blobs overlap and the decoder is smooth. That is latent interpolation, and it only works because the gaps were removed.
+
+### Economics of latent space in VAE
+
+Context: A nat is a unit of information, like a bit but using natural log instead of log base 2. One nat ≈ 1.44 bits. KL comes out in nats when you use ln.
+
+KL loss essentially charges for the real estate in latent space. This is very similar to PCA & finding eigenvalues. (More than an analogy, in fact: a *linear* VAE with a gaussian likelihood provably recovers probabilistic PCA.) Basically the encoder asks "what do I tell the decoder so it can redraw this particular image completely?". Latent space then captures features that drive "lot of pixels" in the output. If you are training VAE to generate cat pictures, things like "color of fur", "size of the cat", "pose of the cat" etc., are high information signals that drive a lot of features in the generated pictures. VAE pays for these features because the pay-off is high per-nat (these specific features play a huge part in the reconstructed image). It wouldn't try to remember the features like "exact position of whiskers of cat in 40th image" because the pay-off is very low. Therefore it won't try to assign a real estate in the latent space. It'll let the decoder figure these finer details. Additionally, this is the reason why VAE generated images are not crisp like the ones generated through adversarial learning.
+
+(The pixel-wise `MSE` is the second reason for the blur: when several reconstructions are plausible, the loss-minimizing output is their average, and averaging sharp alternatives gives a soft image. GANs avoid this because the discriminator penalizes "looks averaged" directly.)
+
+**High payoff-per-nat (bought first):**
+
+| Factor | Why it's cheap | Why it pays |
+| --- | --- | --- |
+| Body pose / orientation | a few numbers | wrong pose = every pixel wrong |
+| Overall brightness | ~1 nat | shifts the whole image |
+| Base fur color | ~2 nats | sets thousands of pixels |
+| Background color | ~1 nat | sets most of the frame |
+| Rough size / distance | ~1 nat | scales everything |
+
+**Low payoff-per-nat (dropped):**
+
+| Factor | Why it's expensive | Why it doesn't pay |
+| --- | --- | --- |
+| Individual whisker positions | ~20 independent values, each unpredictable | a few dozen pixels |
+| Exact fur strand directions | essentially random, huge entropy | sub-pixel texture |
+| Nail shapes | needs its own dedicated bits | tiny region |
+| Precise pupil dilation | unpredictable from anything else | small, low-contrast |
+
+Why KL *is* information, at the two extremes:
+
+| Encoder output | KL | What `z` tells you about the input |
+| --- | --- | --- |
+| `mu=0, σ=1` (identical to prior) | 0 | Nothing. You could have drawn this `z` without ever seeing the image. |
+| `mu=5, σ=0.01` (tight, far off-center) | large | A lot. This `z` pins down which input it came from. |
+
+A dimension that never pays for itself gets switched off entirely: the encoder sets `mu=0, σ=1` for it, pays zero KL, carries zero information. So a 32-dim latent often has only 10-15 genuinely active dimensions, and you can measure which by logging per-dimension KL.
+
+`β` is the dial on all of this. Raise it for a smoother, more disentangled space and blurrier output; lower it for sharper reconstructions, a holier space and worse sampling.
+
+### cVAE, and ACT
+
+The **C** is conditional: both encoder and decoder get an extra input `c`.
+
+- Encoder: `(x, c) → z`
+- Decoder: `(z, c) → x`
+
+With cats, set `c = "black"`. Now `z` doesn't need to encode color since `c` already states it, so `z` carries only **what's left over**: pose, fur texture, lighting. The *style*.
+
+Mapped onto [ACT](#act):
+
+| CVAE | ACT |
+| --- | --- |
+| `c`, the condition | the observation (camera images + joint positions) |
+| `z`, the leftover style | **which of the many valid ways** the human did this demo |
+| decoder output | the chunk of 100 actions |
+
+**At training time** the encoder sees `(observation, the actual expert action chunk)` and produces `z`. The decoder sees `(observation, z)` and predicts the chunk. Because `z` says *which variant* this demo is, the policy no longer has to hedge across all the valid variants. That is the same averaging problem from [Various outputs and losses for robot policy](#various-outputs-and-losses-for-robot-policy), solved with a latent instead of binning or diffusion.
+
+**At test time** there is no expert chunk, so there is no `z` to compute. Set `z = 0`, the mean of the prior, meaning "give me the most typical style for this observation". Note this makes ACT **deterministic** at inference: it spends the CVAE purely to fix training-time averaging, then discards the diversity.
 
 ---
 
