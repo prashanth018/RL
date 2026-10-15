@@ -14,7 +14,8 @@ Working notes in Q&A form. `TO DO` / `need to confirm` markers are things I flag
 9. [VAE](#vae)
 10. [Observations](#observations)
     - [LLM mid-training is imitation learning](#llm-mid-training-is-imitation-learning)
-11. [Questions](#questions)
+11. [Glossary](#glossary)
+12. [Questions](#questions)
 
 ---
 
@@ -314,9 +315,32 @@ Mapped onto [ACT](#act):
 | `z`, the leftover style | **which of the many valid ways** the human did this demo |
 | decoder output | the chunk of 100 actions |
 
-**At training time** the encoder sees `(observation, the actual expert action chunk)` and produces `z`. The decoder sees `(observation, z)` and predicts the chunk. Because `z` says *which variant* this demo is, the policy no longer has to hedge across all the valid variants. That is the same averaging problem from [Various outputs and losses for robot policy](#various-outputs-and-losses-for-robot-policy), solved with a latent instead of binning or diffusion.
+#### At training time:
 
-**At test time** there is no expert chunk, so there is no `z` to compute. Set `z = 0`, the mean of the prior, meaning "give me the most typical style for this observation". Note this makes ACT **deterministic** at inference: it spends the cVAE purely to fix training-time averaging, then discards the diversity.
+```
+(joints + the actual expert action chunk) -> E -> z
+(image + joints, z)                      -> D -> predicted action chunk
+```
+
+- Compute predicted chunk's loss against the expert next chunk.
+- `z` conveys the *nuance* (is it left leaning, is it in a slippery domain etc.,) of the current demo. Given z, the policy (Decoder) no longer has to hedge across all the valid variants. The *"hedge"* here is the same averaging problem from [Various outputs and losses for robot policy](#various-outputs-and-losses-for-robot-policy), solved with a latent instead of binning or diffusion.
+
+#### At test time:
+
+- There is no expert chunk, so there is no `z` to compute. We set `z = 0`, the mean of the prior, meaning "give me the most typical style for this observation". Note this makes ACT **deterministic** at inference: it spends the cVAE purely to fix training-time averaging, then discards the diversity.
+
+#### Why use only Decoder and not Encoder during inference? What's the intuition?
+
+- Decoder is the policy/student that learns to predict the right next actions. Encoder is more like a teacher that teaches the Decoder the nuances of the observations like "this particular demo is the left-handed variant". Essentially Encoder infers the modality (see [Glossary](#glossary)) of the trajectory making it easier for Decoder to learn the policy. This also teaches Decoder to not avg different modalities, i.e., "the average of two valid options is not valid".
+- Decoder relies on Encoder to give it the modality. Decoder does not learn it by itself.
+- **Important takeaway:** *This brings us to one of cVAE/ACT's key drawbacks. If you observe, we set the z to 0 during test time. This is because there is no Encoder to give us the z. This means, we are essentially setting a default modality of 0 thereby giving up test-time mode selection. Other approaches solve this by conditioning it on an observation (like language command), sampling z etc., This is one of the key problems solved along the lineage of the robot policy learning.*
+
+#### Why do we pass image to Decoder but not to Encoder?
+
+- So that encoder doesn't spend much of its time trying to encode the image in the latent space
+- We do set joint observations to both E & D because that's the only thing we want the z to encode or capture the nuance of.
+- Faster inference during train time.
+- Onus is on Decoder to capture the nuances in the images since z is not going to capture it.
 
 ---
 
@@ -342,6 +366,12 @@ Mapped onto [ACT](#act):
 - **Pre-training** incorporates the mammalian knowledge. This knowledge on its own is raw and unproductive.
 - **Mid-training** incorporates useful skills. This knowledge teaches the model the relevant structures of the world that it ought to operate in.
 - **Post-training** helps the model put these useful skills at play, run its own experiments and learn. This phase teaches the model to experience the nuances of the skills it learned in mid-training. A model cut off after mid-training would fail often at tasks and would often not try different approaches to the same problem.
+
+---
+
+## Glossary
+
+- **Multi-modality:** It is the nuance of the trajectory/observation. Mathematically, each state can have multiple right actions. This is generally multiple peaks. Real life examples are, "Left-leaning", "fast moving" etc., Mind you, this is not the "stylistic flavor" but rather the actual >1 modes.
 
 ---
 
