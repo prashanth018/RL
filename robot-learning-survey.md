@@ -293,9 +293,9 @@ Why KL *is* information, at the two extremes:
 | `mu=0, σ=1` (identical to prior) | 0 | Nothing. You could have drawn this `z` without ever seeing the image. |
 | `mu=5, σ=0.01` (tight, far off-center) | large | A lot. This `z` pins down which input it came from. |
 
-A dimension that never pays for itself gets switched off entirely: the encoder sets `mu=0, σ=1` for it, pays zero KL, carries zero information. So a 32-dim latent often has only 10-15 genuinely active dimensions, and you can measure which by logging per-dimension KL.
+A dimension that never pays for itself gets switched off entirely: the encoder sets `mu=0, σ=1` for it, pays zero KL thereby carries zero information. So a 32-dim latent often has only 10-15 genuinely active dimensions, and you can measure which by logging per-dimension KL.
 
-`β` is the dial on all of this. Raise it for a smoother, more disentangled space and blurrier output; lower it for sharper reconstructions, a holier space and worse sampling.
+`β` is the dial on all of this. Raise it for a smoother, more disentangled space and blurrier output; lower it for sharper reconstructions, a **holier space** and worse sampling.
 
 ### cVAE, and ACT
 
@@ -304,11 +304,11 @@ The **C** is conditional: both encoder and decoder get an extra input `c`.
 - Encoder: `(x, c) → z`
 - Decoder: `(z, c) → x`
 
-With cats, set `c = "black"`. Now `z` doesn't need to encode color since `c` already states it, so `z` carries only **what's left over**: pose, fur texture, lighting. The *style*.
+With cats, set `c = "black"`. Now `z` doesn't need to encode "color aspect" since `c` already states it, so `z` carries only **what's left over**: pose, fur texture, lighting.
 
 Mapped onto [ACT](#act):
 
-| CVAE | ACT |
+| cVAE | ACT |
 | --- | --- |
 | `c`, the condition | the observation (camera images + joint positions) |
 | `z`, the leftover style | **which of the many valid ways** the human did this demo |
@@ -316,7 +316,7 @@ Mapped onto [ACT](#act):
 
 **At training time** the encoder sees `(observation, the actual expert action chunk)` and produces `z`. The decoder sees `(observation, z)` and predicts the chunk. Because `z` says *which variant* this demo is, the policy no longer has to hedge across all the valid variants. That is the same averaging problem from [Various outputs and losses for robot policy](#various-outputs-and-losses-for-robot-policy), solved with a latent instead of binning or diffusion.
 
-**At test time** there is no expert chunk, so there is no `z` to compute. Set `z = 0`, the mean of the prior, meaning "give me the most typical style for this observation". Note this makes ACT **deterministic** at inference: it spends the CVAE purely to fix training-time averaging, then discards the diversity.
+**At test time** there is no expert chunk, so there is no `z` to compute. Set `z = 0`, the mean of the prior, meaning "give me the most typical style for this observation". Note this makes ACT **deterministic** at inference: it spends the cVAE purely to fix training-time averaging, then discards the diversity.
 
 ---
 
