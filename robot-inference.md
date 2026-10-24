@@ -1,0 +1,1 @@
+make notes of the DiT technique that denoises iteratively for faster inference - part of lerobot inference code deepdive

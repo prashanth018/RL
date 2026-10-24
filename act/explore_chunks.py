@@ -7,16 +7,20 @@ video decoding. Images come later.
 import torch
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-REPO_ID = "lerobot/aloha_sim_insertion_human"
+# REPO_ID = "lerobot/aloha_sim_insertion_human"
+REPO_ID = "lerobot/aloha_sim_transfer_cube_human"
+
 CHUNK = 100  # ACT's chunk size
 
 ds = LeRobotDataset(REPO_ID)
 hf = ds.hf_dataset.with_format("torch")
 
-actions = hf["action"]  # every action in the dataset, concatenated
-ep_idx = hf["episode_index"]
+actions = hf[:]["action"]  # every action in the dataset, concatenated
+ep_idx = hf[:]["episode_index"]
 
 print(f"all actions        : {tuple(actions.shape)}   (frames, dof)")
+
+print(actions)
 
 # episode 0 only, so the chunk never straddles an episode boundary
 ep0 = actions[ep_idx == 0]
