@@ -109,3 +109,36 @@ No. Physical properties (friction, mass) are independent quantities, so engineer
 That concept is called **Actuator Noise Injection** (or Target Policy Smoothing), but it still does *not* use Dirichlet noise because motor commands (like degrees or volts) are continuous scalars that don't sum to 1. Engineers use Gaussian or Ornstein-Uhlenbeck (momentum-based) noise for this.
 
 *When to use Dirichlet:* Dirichlet noise is used when an AI outputs a **discrete probability vector** (e.g., a 70% chance to move forward, 30% chance to turn). Board game AIs like AlphaZero use Dirichlet noise to scramble these vectors and force exploration.
+## Training & Eval
+
+### Dataset
+- `LeRobotDataset` has two layers. `ds.hf_dataset` is a plain Arrow table with the numeric columns only (`action`, `observation.state`, `episode_index`, `frame_index`, `timestamp`, `next.done`, `index`, `task_index`). Video lives separately as MP4s.
+- `ds[i]` = row `i` of `hf_dataset` + the decoded video frame. That's why reading `hf_dataset` works without ffmpeg but `ds[i]` doesn't.
+- `action` = where the human told the arm to go. `observation.state` = where the arm actually is. So `action[t] ≈ state[t+1]`.
+- `frame_index` is the position within an episode, `index` is the global row. Episodes are contiguous, so `hf[0:400]` is episode 0 for transfer cube.
+- `--dataset.episodes='[0,1,2]'` filters the dataset before sampling. On transfer cube that's 1,200 of 20,000 frames. This is generally used to smoke test. Expect the model to overfit to these 3 episodes.
+
+### Config & flags
+- Folder structure: `configs/train.py` (top level: `--steps`, `--batch_size`, `--num_workers`), `configs/default.py` (`--dataset.*`), `configs/policies.py` (`--policy.*` shared), `policies/<name>/configuration_<name>.py` (`--policy.*` per policy).
+- `--output_dir` throws an exception unless `--resume=true`, else `FileExistsError`.
+
+### Training logs
+- `step` = optimizer updates. `smpl` = `step × batch_size`. `ep` = `smpl / frames_per_episode`. `epch` = `smpl / total_frames`.
+- `grdn` = gradient norm, `√(sum of all grads²)`, i.e. the length of the "change everything" arrow. Measured *before* clipping. ACT policy applies a default clipping at `10.0`. That is, the direction is kept, but the update amplitude is shortened. Large early, want it to fall toward and below 10. 
+    - A spike or sudden drop means gradient explosion/implosion.
+- `updt_s` = GPU time spent to do forward + backward + `optimizer.step` (i.e., being useful). `data_s` = how long the training loop sat waiting on `next(dataloader)`(i.e. GPU being useless).
+    - `data_s ≈ 0` is the goal. On a slow GPU, decoding & dataloader hides behind compute (bad problem to have). On a fast GPU, the CPU workers can fall behind (good problem to have).
+    - If CPU workers are falling behind (data-bound): `workers_needed ≈ current_workers × (updt_s + data_s) / updt_s`, capped by CPU cores. `--num_workers` is top level, default 4.
+- `--log_freq` lets you set the metric logging frequency. Default 200.
+
+### Checkpoints & uploads
+- Checkpoint = `pretrained_model/` (~197 MB: weights, `config.json`, pre/post processors) + `training_state/` (~394 MB: Adam state, 2× the weights). `training_state` is only needed to resume.
+- `--policy.push_to_hub` defaults to `True` and needs `--policy.repo_id`, else it refuses to start. Fires once at the very end. Public by default unless `--policy.private=true`. Needs HF auth.
+- W&B uploads a model artifact at every checkpoint unless `--wandb.disable_artifact=true`.
+
+### Eval
+- Mid-training eval needs `--env.type` + `--env.task`, and runs on the live model in memory. *No checkpoint needed to be saved for mid-training eval runs.* Logs `pc_success`, `avg_max_reward`, and one rollout video per eval to W&B. Default `eval_freq` is 20,000.
+- `pc_success` = `mean(success) × 100`. `eval_s` = total wall clock eval time. `eval_ep_s` = `eval_s / n_episodes`.
+- `avg_max_reward` = furthest stage reached, averaged. Transfer cube stages: 1 touch, 2 lift, 3 both grippers on it, 4 transferred. Way more useful than `pc_success` early on, when success sits at 0 for a long time.
+- Evals run on CPU, so evals don't get faster with a better GPU.
+- Headless cloud box: `export MUJOCO_GL=egl` to run evals without rendering.
