@@ -3,31 +3,31 @@
 # generic settings
 
 # local setup for smoke test
-'''
-export USE_TF=0
 
-lerobot-train \
-  --dataset.repo_id=lerobot/aloha_sim_transfer_cube_human \
-  --policy.type=act \
-  --policy.push_to_hub=false \
-  --policy.device=mps \
-  --policy.chunk_size=100 \
-  --policy.n_action_steps=100 \
-  --steps=100 \
-  --batch_size=8 \
-  --save_freq=100 \
-  --log_freq=10 \
-  --wandb.enable=true \
-  --wandb.project=act-aloha-transfer-cube \
-  --wandb.disable_artifact=true \
-  --dataset.video_backend=pyav \
-  --output_dir=outputs/act_transfer_cube_generic_temp \
-  --env.type=aloha \
-  --env.task=AlohaTransferCube-v0 \
-  --eval_freq=10 \
-  --eval.n_episodes=2 \
-  --eval.batch_size=1
-'''
+# export USE_TF=0
+
+# lerobot-train \
+#   --dataset.repo_id=lerobot/aloha_sim_transfer_cube_human \
+#   --policy.type=act \
+#   --policy.push_to_hub=false \
+#   --policy.device=mps \
+#   --policy.chunk_size=100 \
+#   --policy.n_action_steps=100 \
+#   --steps=100 \
+#   --batch_size=8 \
+#   --save_freq=100 \
+#   --log_freq=10 \
+#   --wandb.enable=true \
+#   --wandb.project=act-aloha-transfer-cube \
+#   --wandb.disable_artifact=true \
+#   --dataset.video_backend=pyav \
+#   --output_dir=outputs/act_transfer_cube_generic_temp \
+#   --env.type=aloha \
+#   --env.task=AlohaTransferCube-v0 \
+#   --eval_freq=10 \
+#   --eval.n_episodes=2 \
+#   --eval.batch_size=1
+
   # --dataset.episodes='[0,1,2]' \
 
 export USE_TF=0
@@ -48,7 +48,7 @@ lerobot-train \
   --wandb.enable=true \
   --wandb.project=act-aloha-transfer-cube \
   --wandb.disable_artifact=true \
-  --output_dir=outputs/act_transfer_cube_generic_100k \
+  --output_dir=outputs/act_transfer_cube_smoke \
   --env.type=aloha \
   --env.task=AlohaTransferCube-v0 \
   --eval_freq=25 \
