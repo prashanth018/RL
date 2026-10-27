@@ -3,3 +3,5 @@
 **/__pycache__/
 *.pyc
 curriculum.md
+outputs/
+api_keys.md
