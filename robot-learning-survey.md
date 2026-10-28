@@ -352,6 +352,38 @@ With KL weight (beta) = 0, encoder passes the answer through `z`. `z` ends up be
 - VAE encoder is series of 4 encoder blocks that takes in [CLS] (similar to positional embedding), joints, and action chunk, goes through self-attention without causal masking. Now, [CLS] borrows the context from all the other tokens (joints and all the actions). We transform [CLS] to a 64 dim vector, split it into 32 (mean) & 32 (log variance). Use the reparametrization trick to generate a 32 dim vector and pass it to VAE decoder.
 - VAE encoder is used during training only. During inference, `z` input is `0`.
 
+### Everything's so good with ACT, why innovate?
+- ACT is task specific, it's trained from scratch, doesn't understand the concept of a color (unless seen in the training data), doesn't understand dog (if not seen in the training data), can't understand abstract concepts, also can't generalize to tasks.
+- ACT makes `z=0` during inference. This essentially makes it stick to single mode (or style). Model can't try a different mode to get unstuck. There is no "stochasticity" in the policy. The actions are deterministic for the same input (which is not the case with LLMs! because the policies are stochastic). A model once stuck in a state will tend to stay stuck. This is not a trait we want in robots!
+- VLAs, VLMs, WMs reason.
+
+## VLA
+
+VLA = Vision + Language + Action.
+
+Vision to perceive, language backbone to understand and reason and also so that the model takes a language input.
+- A ViT is used for the vision backbone, an LLM is used to encode language (Llama 2 in OpenVLA, Gemma in π0). Actions are the output.
+
+Two flavors of how actions come out:
+1. **Tokenized VLAs** (RT-2, OpenVLA): the LLM itself spits out action tokens, no separate head.
+2. **VLM + action expert** (π0): we use these embeddings to fuse so that an action head can independently attend to them in the end.
+
+**Tokenized VLAs, in detail:**
+- Let's say you have 7 DoFs. In tokenized VLAs, outputs are very similar to LLM outputs (like tokens).
+    - Split each action dimension into 256 bins, and map each bin to a token in the vocabulary. The vocab is still Llama's 32k, OpenVLA just overwrites the 256 least-used tokens and makes them mean "bin 0 ... bin 255".
+    - The bins aren't spread over the full action range. OpenVLA places them between the 1st and 99th percentile of each dimension, so a few outlier actions don't waste bins.
+    - An action like [x, y, z, roll, pitch, yaw, gripper] becomes 7 tokens (per frame).
+    - SFTed with ordinary next-token cross-entropy (the same loss as GPT).
+    - FYI, a robot needs to run inference 50 times per sec (if 50 Hz), i.e., ~350-400 token generations per sec.
+- OpenVLA is one of the popular VLAs used (7B model with Llama 2 + vision encoders).
+
+**Cons:**
+- Too slow to run inference on a robot in real time.
+- We mentioned this before, bucket 128 & 129 in a VLA are semantically very similar, which in an LLM they are not. VLA loss doesn't cater to that and penalizes the model for predicting 128 instead of 129.
+- 256 bins over a normalized [-1, 1] range = 2/256 ≈ 0.008 band of precision. If we need finer robots (say for precision/industrial work) we'd have to retrain the model with different vocabulary. Therefore the robots are gonna be less task agnostic (Being less task agnostic is actually fine! Most of the time, a new task needs a simple SFT, but a bin change would need a redo of the robot-action training (OpenVLA's big run on ~1M robot episodes from Open X-Embodiment), since the old bin tokens no longer mean the same thing. The internet pre-training of the VLM survives though.)
+
+### Are the 90% LLM weights frozen during SFT?
+- In practice they finetune all of the model. OpenVLA found that finetuning the vision encoder too mattered. This is because internet images are mostly “what is this object,” but a robot needs “exactly where is it, to the millimeter, depth, width perception” etc.,
 
 ---
 
