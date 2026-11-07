@@ -6,13 +6,13 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from torch.optim import Adam
 
-EPOCHS = 3000
+EPOCHS = 9000
 DIFFUSION_STEPS = 10
 TRAIN_BATCH_SIZE = 256
 INFERENCE_BATCH_SIZE = 256
 CHECKPOINT_PATH = Path(__file__).parent / "checkpoints" / "flow_match.pt"
 PLOTS_DIR = Path(__file__).parent / "plots"
-PLOT_EVERY = 250
+LOG_EVERY = 100
 
 
 class FlowMatch(Module):
@@ -39,6 +39,8 @@ def train(means, stds):
     model = FlowMatch()
     optim = Adam(model.parameters(), lr=0.001)
     mse_loss = nn.MSELoss()
+    losses = []
+    running_loss = 0.0
 
     for e in range(EPOCHS):
         dest = torch.normal(mean=batch_means, std=batch_stds)
@@ -52,16 +54,12 @@ def train(means, stds):
         loss.backward()
         optim.step()
 
-        if e % PLOT_EVERY == 0:
-            with torch.no_grad():
-                samples = inference(model)
-            plot(
-                samples,
-                path=PLOTS_DIR / f"epoch_{e:05d}.png",
-                title=f"epoch {e}, loss {loss.item():.3f}",
-            )
+        running_loss += loss.item()
+        if (e + 1) % LOG_EVERY == 0:
+            losses.append((e + 1, running_loss / LOG_EVERY))
+            running_loss = 0.0
 
-    return model
+    return model, losses
 
 
 def inference(model):
@@ -104,13 +102,35 @@ def plot(x, path=None, title=None):
         plt.close(fig)
 
 
+def plot_loss(losses, path):
+    steps, values = zip(*losses)
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(steps, values, linewidth=2)
+    ax.set_yscale("log")
+    ax.set_xlabel("Step")
+    ax.set_ylabel(f"Loss (mean of last {LOG_EVERY} steps)")
+    ax.set_title("Flow matching training loss")
+    ax.grid(True, axis="y", alpha=0.3)
+    plt.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     # train()
     # print(torch.normal(mean=means, std=stds))
     # model = FlowMatch()
     means = torch.tensor([8.1, 5.0, 61.3, 22.8])
     stds = torch.tensor([2.1, 1.3, 7.7, 2.8])
-    model = train(means=means, stds=stds)
+    model, losses = train(means=means, stds=stds)
     save_model(model)
-    plot(inference(model))
+    with torch.no_grad():
+        samples = inference(model)
+    plot(
+        samples,
+        path=PLOTS_DIR / f"epoch_{EPOCHS:05d}.png",
+        title=f"epoch {EPOCHS}, loss {losses[-1][1]:.3f}",
+    )
+    plot_loss(losses, PLOTS_DIR / "loss_curve.png")
     # print(model(torch.randn(8, 5)))
