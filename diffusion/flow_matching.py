@@ -32,6 +32,11 @@ class FlowMatch(Module):
         return self.net(x)
 
 
+def sample_mixture(n, means, stds, weights):
+    idx = torch.multinomial(weights, n, replacement=True)
+    return torch.normal(mean=means[idx], std=stds[idx]).unsqueeze(1)
+
+
 def train(means, stds):
     batch_means = means.expand(TRAIN_BATCH_SIZE, 4)
     batch_stds = stds.expand(TRAIN_BATCH_SIZE, 4)
@@ -62,15 +67,20 @@ def train(means, stds):
     return model, losses
 
 
-def inference(model):
-    # model = FlowMatch()
-    xt = torch.randn(INFERENCE_BATCH_SIZE, 4)
+def inference_trajectory(model, n):
+    xt = torch.randn(n, 4)
+    trajectory = [xt]
     for t in range(0, DIFFUSION_STEPS):
-        append = torch.full((INFERENCE_BATCH_SIZE, 1), float(t) / DIFFUSION_STEPS)
+        append = torch.full((n, 1), float(t) / DIFFUSION_STEPS)
         x = torch.cat((xt, append), dim=1)
         v = model(x)
         xt = v * (float(1) / DIFFUSION_STEPS) + xt
-    return xt
+        trajectory.append(xt)
+    return torch.stack(trajectory)
+
+
+def inference(model):
+    return inference_trajectory(model, INFERENCE_BATCH_SIZE)[-1]
 
 
 def save_model(model, path=CHECKPOINT_PATH):
@@ -117,6 +127,31 @@ def plot_loss(losses, path):
     plt.close(fig)
 
 
+def plot_trajectory(trajectory, means, stds, path):
+    trajectory = trajectory.detach().cpu().numpy()
+    ts = [i / DIFFUSION_STEPS for i in range(DIFFUSION_STEPS + 1)]
+    colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
+    dims = trajectory.shape[1]
+    fig, axes = plt.subplots(1, dims, figsize=(4 * dims, 3.5), squeeze=False)
+    for d, ax in enumerate(axes[0]):
+        m, s = means[d].item(), stds[d].item()
+        ax.axhspan(m - s, m + s, color="#9a9a96", alpha=0.18, linewidth=0, label="target μ ± σ")
+        ax.axhline(m, color="#9a9a96", linestyle="--", linewidth=1)
+        ax.plot(ts, trajectory[:, d], color=colors[d], linewidth=2, marker="o", markersize=5)
+        ax.annotate(f"{trajectory[-1, d]:.1f}", (ts[-1], trajectory[-1, d]), textcoords="offset points", xytext=(-6, 8), ha="right", fontsize=9)
+        ax.set_title(f"dim {d}: μ={m:.1f}, σ={s:.1f}")
+        ax.set_xlabel("t  (0 = noise, 1 = sample)")
+        ax.grid(True, axis="y", alpha=0.3)
+    axes[0][0].set_ylabel("value")
+    axes[0][0].legend(loc="upper left", fontsize=8)
+    fig.suptitle("One sample's path from noise to the target distribution")
+
+    plt.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path)
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     # train()
     # print(torch.normal(mean=means, std=stds))
@@ -133,4 +168,7 @@ if __name__ == "__main__":
         title=f"epoch {EPOCHS}, loss {losses[-1][1]:.3f}",
     )
     plot_loss(losses, PLOTS_DIR / "loss_curve.png")
+    with torch.no_grad():
+        trajectory = inference_trajectory(model, 1)[:, 0]
+    plot_trajectory(trajectory, means, stds, PLOTS_DIR / "trajectory.png")
     # print(model(torch.randn(8, 5)))
