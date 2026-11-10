@@ -419,6 +419,8 @@ Notice that this algorithm fixes each of the above stated drawbacks (inherently 
 ### How are we inducing stochasticity?
 *That is, how do we ensure that the model can dig itself out of stuck states?* The starting randomness influences the respective action mode. This ensures that the model eventually learns to dig itself out of the stuck states.
 
+Note: pi0 uses conditional flow matching with VLA. Diffusion denoises to produce target action but we still need the pretrained model for perception & understanding.
+
 ---
 
 ## Observations
