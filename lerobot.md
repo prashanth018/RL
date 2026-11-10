@@ -1,6 +1,23 @@
-# Robot Learning FAQ
+# LeRobot Notes
 
-## The Shift to Robot Learning
+Questions and answers from working through the [Hugging Face LeRobot guide](https://huggingface.co/papers/2510.12403), plus practical notes from using LeRobot.
+
+**Contents**
+1. [Learned vs Model-Based Robotics](#learned-vs-model-based-robotics)
+2. [LeRobot Architecture & Data](#lerobot-architecture--data)
+3. [Dimensionality & Data Collection](#dimensionality--data-collection)
+4. [Kinematics (FK, IK, and Diff-IK)](#kinematics-fk-ik-and-diff-ik)
+5. [Reinforcement Learning Algorithms & Noise](#reinforcement-learning-algorithms--noise)
+6. [Training & Eval](#training--eval)
+    - [Dataset](#dataset)
+    - [Config & flags](#config--flags)
+    - [Training logs](#training-logs)
+    - [Checkpoints & uploads](#checkpoints--uploads)
+    - [Eval](#eval)
+
+---
+
+## Learned vs Model-Based Robotics
 
 ### What does it mean that "learning can prove just as effective as explicit modeling"?
 
