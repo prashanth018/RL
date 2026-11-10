@@ -12,10 +12,16 @@ Working notes in Q&A form. `TO DO` / `need to confirm` markers are things I flag
 7. [Where does the data come from?](#where-does-the-data-come-from)
 8. [ACT](#act)
 9. [VAE](#vae)
-10. [Observations](#observations)
+    - [cVAE, and ACT](#cvae-and-act)
+    - [ACT Architecture](#act-architecture)
+    - [Everything's so good with ACT, why innovate?](#everythings-so-good-with-act-why-innovate)
+10. [VLA](#vla)
+11. [Flow Matching with Optimal Transport](#flow-matching-with-optimal-transport)
+    - [How are we inducing stochasticity?](#how-are-we-inducing-stochasticity)
+12. [Observations](#observations)
     - [LLM mid-training is imitation learning](#llm-mid-training-is-imitation-learning)
-11. [Glossary](#glossary)
-12. [Questions](#questions)
+13. [Glossary](#glossary)
+14. [Questions](#questions)
 
 ---
 
@@ -90,7 +96,7 @@ GPT was trained on trillions of words from millions of people: Reddit posts, tex
 
 - **MSE head:** Assuming we have n actuators. In this approach each actuator produces a continuous output like, `action = [joint1: +0.12, joint2: -0.30, joint3: +0.05, ..., gripper: 0.8]`.
 - **Gaussian head (mean, variance per actuator):** In this approach each actuator produces a mean and variance. We then calculate the probability `z` vector for each actuator from the mean and variance. We compute this based on the expert action value (need to confirm this). We then take negative log likelihood on the prob vector for each actuator to compute the loss (need to confirm). The advantage over the pure MSE is that the learning is gonna be more stable? (confirm this too).
-- **Discretized head (softmax over each actuator's bins):** Problem with both the above approaches is that.. if the training data saw 70 +1s and 40 -1s then the output is gonna get averaged to +0.4. This might be wrong, The training data is trying to convey that there are multiple ways to achieve the successful outcome but the policy is learning to average these individual policies. Instead, one way to handle this is to discretize each actuators' output into 256 bins (say) and then output a LLM style prob vector of size 256 for each actuator on every turn. This enables the robot policy to learn multiple trajectories to achieve success without averaging the policies.
+- **Discretized head (softmax over each actuator's bins):** Problem with both the above approaches is that.. if the training data saw 70 +1s and 40 -1s then the output is gonna get averaged to (70 - 40)/110 ≈ +0.27. This might be wrong, The training data is trying to convey that there are multiple ways to achieve the successful outcome but the policy is learning to average these individual policies. Instead, one way to handle this is to discretize each actuators' output into 256 bins (say) and then output a LLM style prob vector of size 256 for each actuator on every turn. This enables the robot policy to learn multiple trajectories to achieve success without averaging the policies.
 - **Diffusion / flow head:** Problem with the Softmax policy mentioned above is that, say, bin 145 and 146 are different action classes from model's perspective.. but realistically they are very similar actions. This is not a problem with LLMs because 145 and 146 might actually be different classes semantically. Diffusion policies iteratively denoise the output to predict the specific trajectory. They have the ability to learn multiple trajectories.
 
 ---
@@ -384,6 +390,34 @@ Two flavors of how actions come out:
 
 ### Are the 90% LLM weights frozen during SFT?
 - In practice they finetune all of the model. OpenVLA found that finetuning the vision encoder too mattered. This is because internet images are mostly “what is this object,” but a robot needs “exactly where is it, to the millimeter, depth, width perception” etc.,
+
+## Flow Matching with Optimal Transport
+
+**Why flow matching**
+
+As stated above, we need to be able to generate continuous actions (unlike bins in VLA), we need to retain the stochasticity during test time (what we didn't have in ACT). Also, VLA infers token by token which isn't practically feasible on a robot. Let's remember these drawbacks.
+
+**How it works**
+
+Flow Matching iteratively learns to denoise the input. It outputs a velocity field between the noise to target distribution. In a way, the model learns a 1-1 mapping. The assumption here is that the noise to target has a linear vector flow from the noise (x0) to the target (x1). The model is trained to output the velocity gradient at each timestep (or more like, the direction where to go). This enables the model to start with a noisy data point at t=0, then generate a bit less noisy data point at t=0.1, and so on.
+
+As is in a typical vector calculus; model outputs the "direction", we iteratively "trust" that direction and move in that direction. Refer to the inference pseudocode below.
+
+```
+  x ← noise
+  repeat 10 times:
+      x ← x + velocity(x, t, camera, language) × 0.1
+  x is now your action chunk
+```
+
+Optimal Transport means, the path from noise to action is a straight line during training. Straight paths are easier to learn (we'll talk about much scarier *Stochastic Differential Equations* in the later section).
+
+**What it fixes**
+
+Notice that this algorithm fixes each of the above stated drawbacks (inherently stochastic, honors continuous actions, way faster than VLA). Refer to the [Flow Matching implementation and observations](diffusion/README.md) for how the denoising changes over iterations, training pseudocode, loss curve, how it solves the modality problem etc.,
+
+### How are we inducing stochasticity?
+*That is, how do we ensure that the model can dig itself out of stuck states?* The starting randomness influences the respective action mode. This ensures that the model eventually learns to dig itself out of the stuck states.
 
 ---
 

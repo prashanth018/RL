@@ -1,8 +1,8 @@
 # Flow Matching From Scratch
 
-A minimal flow matching implementation in PyTorch, trained on a toy problem: turn Gaussian noise into samples from a target distribution.
+Flow matching implementation in PyTorch, trained on a toy problem: turn Gaussian noise into samples from a target distribution.
 
-**TL;DR:** A small MLP learns a velocity field that carries `N(0, I)` noise to a 4-dim Gaussian. After 9000 steps the sampled means land within ~2% of the targets. Standard deviations come out 8-23% too narrow, worst on dim 2. A single sample's path from noise to target is almost a straight line.
+**TL;DR:** An MLP learns a velocity field that carries `N(0, I)` noise to a 4-dim Gaussian. After 9000 steps the sampled means land within ~2% of the targets. Standard deviations come out 8-23% too narrow, worst on dim 2. A single sample's path from noise to target is almost a straight line.
 
 ## What's here
 
@@ -113,5 +113,5 @@ With 256 samples, each std estimate is only good to about ±5%, so small differe
 
 ## Next
 
-- *This target has a single mode per dimension*, so it tests the pipeline, not multimodality. Next run: the 70/40 gripper example from the [survey](../robot-learning-survey.md#various-outputs-and-losses-for-robot-policy) (`+1` with probability 70/110, else `-1`). MSE would output +0.27. Flow matching should produce two peaks.
+- *This target has a single mode per dimension*, so it doesn't test multimodality. Next run: the 70/40 gripper example from the [survey](../robot-learning-survey.md#various-outputs-and-losses-for-robot-policy) (`+1` with probability 70/110, else `-1`). MSE would output +0.27. Flow matching should produce two peaks.
 - Normalize targets to close the remaining std gap on dim 2.
